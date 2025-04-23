@@ -3,7 +3,7 @@ target = "xtensa-esp32-espidf"
 
 [target.xtensa-esp32-espidf]
 linker = "ldproxy"
-runner = "espflash flash --monitor"
+runner = "espflash flash --monitor --chip esp32 --port COM9"
 rustflags = [ "--cfg",  "espidf_time64"]
 
 [unstable]

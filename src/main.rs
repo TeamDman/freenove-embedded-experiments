@@ -3,10 +3,25 @@ use std::time::Duration;
 use esp_idf_hal::delay::FreeRtos;
 use esp_idf_hal::gpio::*;
 use esp_idf_hal::peripherals::Peripherals;
+use esp_idf_hal::sys::EspError;
 use eyre::bail;
 
 fn sleep(duration: Duration) {
     FreeRtos::delay_ms(duration.as_millis() as u32);
+}
+
+trait LedControl {
+    fn set_high(&mut self) -> Result<(), EspError>;
+    fn set_low(&mut self) -> Result<(), EspError>;
+}
+
+impl<'a, P: OutputPin> LedControl for PinDriver<'a, P, Output> {
+    fn set_high(&mut self) -> Result<(), EspError> {
+        self.set_high()
+    }
+    fn set_low(&mut self) -> Result<(), EspError> {
+        self.set_low()
+    }
 }
 
 fn main() -> eyre::Result<()> {
@@ -16,23 +31,29 @@ fn main() -> eyre::Result<()> {
     color_eyre::install()?;
 
     let peripherals = Peripherals::take()?;
-    let mut led = PinDriver::output(peripherals.pins.gpio2)?;
+    let led1 = PinDriver::output(peripherals.pins.gpio2)?;
+    let led2 = PinDriver::output(peripherals.pins.gpio4)?;
+    let led3 = PinDriver::output(peripherals.pins.gpio33)?;
+    let led4 = PinDriver::output(peripherals.pins.gpio32)?;
+
+    let mut leds: Vec<(Box<dyn LedControl>, u8)> = vec![
+        (Box::new(led1), 0b0001),
+        (Box::new(led2), 0b0010),
+        (Box::new(led3), 0b0100),
+        (Box::new(led4), 0b1000),
+    ];
+
     let mut i = 0;
 
-    let high_duration = Duration::from_millis(1000);
-    let low_duration = Duration::from_millis(1000);
     loop {
-        led.set_high()?;
-        // we are sleeping here to make sure the watchdog isn't triggered
-        sleep(high_duration);
-
-        led.set_low()?;
-        sleep(low_duration);
-
-        log::info!("BRUH! {i}");
-        i+=1;
-        if i > 10 {
-            bail!("Reached 10!");
+        i += 1;
+        for (ref mut led, mask) in leds.iter_mut() {
+            if i as u8 & *mask != 0 {
+                led.set_high()?;
+            } else {
+                led.set_low()?;
+            }
         }
+        sleep(Duration::from_millis(500));
     }
 }
